@@ -48,4 +48,4 @@ EXPOSE 3001
 # ✅ fetch Prisma CLI on boot, apply migrations, then start Nest
 CMD node -e "console.log('Applying migrations...')" \
  && pnpm dlx prisma@6 migrate deploy \
- && node dist/main.js
+ && node dist/src/main.js
