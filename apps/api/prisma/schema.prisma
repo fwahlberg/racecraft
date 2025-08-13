@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organiser {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  events    Event[]
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  organiserId String
+  name        String
+  venue       String?
+  date        DateTime
+  entryOpens  DateTime?
+  entryCloses DateTime?
+  status      EventStatus @default(DRAFT)
+  createdAt   DateTime    @default(now())
+
+  organiser Organiser @relation(fields: [organiserId], references: [id])
+
+  // 👇 add this opposite side of the relation
+  races Race[]
+
+  @@index([date])
+  @@index([organiserId])
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+model Race {
+  id         String   @id @default(uuid())
+  eventId    String
+  name       String
+  discipline String
+  startTime  String?
+  laps       Int?
+  capacity   Int?
+  createdAt  DateTime @default(now())
+  entries    Entry[]
+
+  // 👇 points to Event; Event exposes `races`
+  event      Event          @relation(fields: [eventId], references: [id])
+  categories RaceCategory[]
+
+  @@unique([eventId, name]) // helpful for idempotent seeds
+  @@index([eventId])
+}
+
+model RaceCategory {
+  id     String @id @default(uuid())
+  raceId String
+  gender String // "open" | "women"
+  label  String // "E", "Cat 1", "Cat 2", etc.
+
+  race Race @relation(fields: [raceId], references: [id])
+
+  @@unique([raceId, gender, label])
+}
+
+model Entry {
+  id             String   @id @default(uuid())
+  raceId         String
+  riderName      String
+  email          String?     // useful for confirmations
+  club           String?
+  bcId           String?     // British Cycling ID (nullable, but unique if present)
+  emergencyName  String
+  emergencyPhone String
+  paid           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  race Race @relation(fields: [raceId], references: [id])
+
+  @@index([raceId])
+  @@unique([bcId], map: "unique_bc_id") // optional; remove if BC IDs aren’t globally unique
+  // Optional de-dup safety while you don’t have users:
+  // @@unique([raceId, email])
+}

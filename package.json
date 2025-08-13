@@ -1,0 +1,16 @@
+{
+  "name": "racecraft",
+  "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+  
+    "build": "turbo run build --filter=@racecraft/api --filter=@racecraft/web"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.14.0",
+    "prisma": "^6.0.0"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.5"
+  }
+}
