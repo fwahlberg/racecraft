@@ -1,3 +1,6 @@
+export const metadata = {
+  title: "RaceCraft - Home",
+};
 import Link from "next/link";
 
 // ---- Types ----

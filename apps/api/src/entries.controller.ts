@@ -1,4 +1,12 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, BadRequestException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 
 type CreateEntryDto = {
@@ -17,16 +25,25 @@ export class EntriesController {
   // GET /v1/races/:raceId/availability
   @Get('races/:raceId/availability')
   async availability(@Param('raceId') raceId: string) {
-    const race = await this.prisma.race.findUnique({ where: { id: raceId }, select: { id: true, capacity: true } });
+    const race = await this.prisma.race.findUnique({
+      where: { id: raceId },
+      select: { id: true, capacity: true },
+    });
     if (!race) throw new NotFoundException('Race not found');
     const count = await this.prisma.entry.count({ where: { raceId } });
-    const remaining = typeof race.capacity === 'number' ? Math.max(0, race.capacity - count) : null;
+    const remaining =
+      typeof race.capacity === 'number'
+        ? Math.max(0, race.capacity - count)
+        : null;
     return { capacity: race.capacity ?? null, taken: count, remaining };
   }
 
   // POST /v1/races/:raceId/entries
   @Post('races/:raceId/entries')
-  async createEntry(@Param('raceId') raceId: string, @Body() body: CreateEntryDto) {
+  async createEntry(
+    @Param('raceId') raceId: string,
+    @Body() body: CreateEntryDto,
+  ) {
     const race = await this.prisma.race.findUnique({
       where: { id: raceId },
       include: { event: { select: { id: true, name: true, date: true } } }
@@ -70,10 +87,16 @@ export class EntriesController {
   @Post('payments/simulate')
   async simulatePayment(@Body() body: { entryId: string }) {
     if (!body.entryId) throw new BadRequestException('entryId required');
-    const entry = await this.prisma.entry.findUnique({ where: { id: body.entryId }, select: { id: true, paid: true } });
+    const entry = await this.prisma.entry.findUnique({
+      where: { id: body.entryId },
+      select: { id: true, paid: true },
+    });
     if (!entry) throw new NotFoundException('Entry not found');
     if (entry.paid) return { status: 'already_paid' };
-    await this.prisma.entry.update({ where: { id: body.entryId }, data: { paid: true } });
+    await this.prisma.entry.update({
+      where: { id: body.entryId },
+      data: { paid: true },
+    });
     return { status: 'paid' };
   }
 }
