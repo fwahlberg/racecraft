@@ -3,44 +3,47 @@ FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 WORKDIR /app
 
-# ---------- prep (lock + store for cache) ----------
-# copy workspace manifests first for better layer cache
+# Copy workspace metadata first (for layer caching)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json ./apps/api/package.json
-# populate pnpm store (helps cache), but we won't force offline later
-RUN pnpm -w fetch --prod
+
+# Optional: warm pnpm store for cache (network is available on Render)
+RUN pnpm -w fetch
 
 # ---------- build ----------
 FROM base AS build
-# bring in the repo
+# bring repo files
 COPY . .
-# reuse the prefetched store
+# reuse store cache
 COPY --from=base /root/.local/share/pnpm/store /root/.local/share/pnpm/store
 
-# install ONLY the API's production deps into apps/api/node_modules (online)
-RUN pnpm --filter ./apps/api... install --prod
-
-# generate prisma client and build the API
+# Install API deps INCLUDING dev deps so `nest` is available
 WORKDIR /app/apps/api
+RUN pnpm install
+
+# Generate Prisma client and compile
 RUN pnpm prisma generate
 RUN pnpm build
+
+# Prune node_modules to production-only to keep runtime image small
+RUN pnpm prune --prod
 
 # ---------- runtime ----------
 FROM node:20-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app/apps/api
 
-# copy built app and dependencies
+# Copy compiled app, prod node_modules, prisma schema, manifest
 COPY --from=build /app/apps/api/dist ./dist
-COPY --from=build /app/apps/api/package.json ./package.json
-COPY --from=build /app/apps/api/prisma ./prisma
 COPY --from=build /app/apps/api/node_modules ./node_modules
-# copy the pnpm store so symlinks in node_modules resolve
+COPY --from=build /app/apps/api/prisma ./prisma
+COPY --from=build /app/apps/api/package.json ./package.json
+
+# Copy pnpm store so symlinks in node_modules resolve
 COPY --from=build /root/.local/share/pnpm/store /root/.local/share/pnpm/store
 
 EXPOSE 3001
-
-# If prisma CLI is in apps/api dependencies (recommended)
+# Run migrations with the local Prisma CLI, then start
 CMD node -e "console.log('Applying migrations...')" \
  && ./node_modules/.bin/prisma migrate deploy \
  && node dist/main.js
