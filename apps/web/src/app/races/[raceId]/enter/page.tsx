@@ -1,6 +1,11 @@
-// Server component: can access params synchronously
+// apps/web/src/app/races/[raceId]/enter/page.tsx
 import EnterRaceClient from "./EnterRaceClient";
 
-export default function Page({ params }: { params: { raceId: string } }) {
-  return <EnterRaceClient raceId={params.raceId} />;
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ raceId: string }>;
+}) {
+  const { raceId } = await params; // ← unwrap the Promise
+  return <EnterRaceClient raceId={raceId} />;
 }
