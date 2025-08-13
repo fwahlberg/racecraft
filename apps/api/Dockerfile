@@ -25,8 +25,7 @@ RUN pnpm install
 RUN pnpm prisma generate
 RUN pnpm build
 
-# prune to production deps for runtime
-RUN pnpm prune --prod
+
 
 # ---------- runtime ----------
 FROM node:20-alpine AS runner
@@ -36,12 +35,14 @@ WORKDIR /app/apps/api
 # enable pnpm in the runner so we can use `pnpm dlx`
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
+
 # copy compiled app and production deps
 COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/api/package.json ./package.json
 COPY --from=build /app/apps/api/prisma ./prisma
 COPY --from=build /app/apps/api/prisma/schema.prisma ./prisma/schema.prisma
-COPY --from=build /app/apps/api/node_modules ./node_modules
+# install production dependencies in the runtime container
+RUN pnpm install --prod --shamefully-hoist
 # (store copy not needed because we won't rely on shipped prisma)
 
 EXPOSE 3001
@@ -49,4 +50,4 @@ EXPOSE 3001
 # ✅ fetch Prisma CLI on boot, apply migrations, then start Nest
 CMD node -e "console.log('Applying migrations...')" \
  && pnpm dlx prisma@6 migrate deploy \
- && node dist/main.js
+ && node dist/src/main.js
