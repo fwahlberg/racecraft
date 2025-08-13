@@ -6,6 +6,8 @@ import Link from "next/link";
 type Availability = { capacity: number | null; taken: number; remaining: number | null };
 
 const API = process.env.NEXT_PUBLIC_API_URL!;
+const errorMessage = (e: unknown): string =>
+    e instanceof Error ? e.message : typeof e === "string" ? e : "Something went wrong";
 
 export default function EnterRaceClient({ raceId }: { raceId: string }) {
   const [loading, setLoading] = useState(false);
@@ -42,8 +44,12 @@ export default function EnterRaceClient({ raceId }: { raceId: string }) {
     e.preventDefault();
     setError(null);
     setLoading(true);
+  
+    type CreateEntryResponse = { entryId: string; payment: { clientSecret: string } };
+    type ApiError = { message?: string };
+  
     try {
-      // Create entry for this race
+      // Create entry
       const res = await fetch(`${API}/races/${raceId}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,20 +62,29 @@ export default function EnterRaceClient({ raceId }: { raceId: string }) {
           emergencyPhone: emPhone,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as { entryId: string; payment: { clientSecret: string } };
-
+  
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as ApiError | null;
+        throw new Error(body?.message ?? `Request failed (${res.status})`);
+      }
+  
+      const data = (await res.json()) as CreateEntryResponse;
+  
       // Simulate payment
       const pay = await fetch(`${API}/payments/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entryId: data.entryId }),
       });
-      if (!pay.ok) throw new Error(await pay.text());
-
+  
+      if (!pay.ok) {
+        const body = (await pay.json().catch(() => null)) as ApiError | null;
+        throw new Error(body?.message ?? `Payment failed (${pay.status})`);
+      }
+  
       setDone({ entryId: data.entryId });
-    } catch (err: any) {
-      setError(err?.message ?? "Something went wrong");
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
