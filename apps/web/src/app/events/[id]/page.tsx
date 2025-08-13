@@ -53,11 +53,18 @@ function Badge({ children, className = "" }: { children: React.ReactNode; classN
 }
 
 // ---- Page ----
-export default async function EventPage({ params }: { params: { id: string } }) {
-  const [evt, races] = await Promise.all([getEvent(params.id), getRaces(params.id)]);
-  const { weekday, day, month, year } = dateParts(evt.date);
-
-  return (
+export default async function EventPage({
+    params,
+  }: {
+    params: Promise<{ id: string }>;
+  }) {
+    const { id } = await params;
+  
+    const [evt, races] = await Promise.all([getEvent(id), getRaces(id)]);
+    const { weekday, day, month, year } = dateParts(evt.date);
+  
+    return (
+  
     <main className="min-h-[100svh] bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/60">
