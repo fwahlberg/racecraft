@@ -3,29 +3,29 @@ FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 WORKDIR /app
 
-# Copy workspace metadata first (for layer caching)
+# Copy workspace metadata first for better caching
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json ./apps/api/package.json
 
-# Optional: warm pnpm store for cache (network is available on Render)
+# Optional: warm pnpm store (cache only)
 RUN pnpm -w fetch
 
 # ---------- build ----------
 FROM base AS build
-# bring repo files
+# bring the repo
 COPY . .
 # reuse store cache
 COPY --from=base /root/.local/share/pnpm/store /root/.local/share/pnpm/store
 
-# Install API deps INCLUDING dev deps so `nest` is available
+# install API deps (dev + prod so `nest` exists to build)
 WORKDIR /app/apps/api
 RUN pnpm install
 
-# Generate Prisma client and compile
+# generate Prisma client & build
 RUN pnpm prisma generate
 RUN pnpm build
 
-# Prune node_modules to production-only to keep runtime image small
+# prune to production deps for runtime
 RUN pnpm prune --prod
 
 # ---------- runtime ----------
@@ -33,17 +33,19 @@ FROM node:20-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app/apps/api
 
-# Copy compiled app, prod node_modules, prisma schema, manifest
-COPY --from=build /app/apps/api/dist ./dist
-COPY --from=build /app/apps/api/node_modules ./node_modules
-COPY --from=build /app/apps/api/prisma ./prisma
-COPY --from=build /app/apps/api/package.json ./package.json
+# enable pnpm in the runner so we can use `pnpm dlx`
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
-# Copy pnpm store so symlinks in node_modules resolve
-COPY --from=build /root/.local/share/pnpm/store /root/.local/share/pnpm/store
+# copy compiled app and production deps
+COPY --from=build /app/apps/api/dist ./dist
+COPY --from=build /app/apps/api/package.json ./package.json
+COPY --from=build /app/apps/api/prisma ./prisma
+COPY --from=build /app/apps/api/node_modules ./node_modules
+# (store copy not needed because we won't rely on shipped prisma)
 
 EXPOSE 3001
-# Run migrations with the local Prisma CLI, then start
+
+# ✅ fetch Prisma CLI on boot, apply migrations, then start Nest
 CMD node -e "console.log('Applying migrations...')" \
- && ./node_modules/.bin/prisma migrate deploy \
+ && pnpm dlx prisma@6 migrate deploy \
  && node dist/main.js
